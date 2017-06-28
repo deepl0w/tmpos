@@ -75,28 +75,72 @@ impl Writer {
         }
     }
 
-    pub fn write_str(&mut self, s: &str) {
-        for byte in s.bytes() {
-            self.write_byte(byte)
-        }
-    }
-
     fn buffer(&mut self) -> &mut Buffer {
         unsafe{ self.buffer.as_mut() }
     }
 
     fn new_line(&mut self) {
-        /* TODO */
+        for row in 1..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                let buffer = self.buffer();
+                let character = buffer.chars[row][col].read();
+                buffer.chars[row - 1][col].write(character);
+            }
+        }
+
+        self.clear_row(BUFFER_HEIGHT-1);
+        self.column_position = 0;
     }
 
-}
-pub fn print_something(s: &str) {
-    let mut writer = Writer {
-        column_position: 0,
-        color_code: ColorCode::new(Color::LightGreen, Color::Black),
-        buffer: unsafe { Unique::new(0xb8000 as *mut _) },
-    };
+    fn clear_row(&mut self, row: usize) {
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
 
-    writer.write_str(s);
+        for col in 0..BUFFER_WIDTH {
+            self.buffer().chars[row][col].write(blank);
+        }
+    }
 }
 
+use core::fmt;
+
+impl fmt::Write for Writer {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for byte in s.bytes() {
+            self.write_byte(byte)
+        }
+        Ok(())
+    }
+}
+
+use spin::Mutex;
+
+pub static WRITER: Mutex<Writer> = Mutex::new(Writer {
+    column_position: 0,
+    color_code: ColorCode::new(Color::White, Color::Black),
+    buffer: unsafe { Unique::new(0xb8000 as *mut _) },
+});
+
+macro_rules! print {
+    ($($arg:tt)*) => ({
+        $crate::vga_buffer::print(format_args!($($arg)*));
+    });
+}
+
+pub fn print(args: fmt::Arguments) {
+    use core::fmt::Write;
+    WRITER.lock().write_fmt(args).unwrap();
+}
+
+macro_rules! println {
+    ($fmt:expr) => (print!(concat!($fmt, "\n")));
+    ($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
+}
+
+pub fn clear_screen() {
+    for _ in 0..BUFFER_HEIGHT {
+        println!("");
+    }
+}

@@ -3,16 +3,19 @@
 #![feature(unique)]
 #![no_std]
 
+#[macro_use]
 mod vga_buffer;
 
 extern crate volatile;
 extern crate rlibc;
-
+extern crate spin;
 
 #[no_mangle]
 pub extern fn rust_main() {
 
-    vga_buffer::print_something("What the fuck");
+    vga_buffer::clear_screen();
+    println!("{}", { println!("inner"); "outer" });
+
     loop{}
 }
 
